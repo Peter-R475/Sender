@@ -18,7 +18,7 @@ const maxDisplacement = 400;
 const maxTrackAge = 3;
 let isProcessingActive = false;
 let currentSource = 'video';
-const FIVE_MINUTES = 5 * 60;
+const ONE_MINUTE = 1 * 60 * 1000;
 const currentDateTime = new Date();
 const day = currentDateTime.getDate();
 const month = currentDateTime.getMonth();
@@ -39,8 +39,9 @@ let personCount = 0;
 }, FIVE_MINUTES); */
 
 const syncInterval = setInterval(() => {
-    sender(totalParticipants);
-}, FIVE_MINUTES);
+    sender(currentParticipants);
+    console.log('sent', currentParticipants);
+}, ONE_MINUTE);
 
 async function checkSession() {
     try {
@@ -69,16 +70,28 @@ function getFormattedTime() {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
 
-    return `${day}:${month}:${year}:${hours}:${minutes}:${seconds}`;
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-function sender(personCount) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'sender.php', true);
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+function sender(currentParticipants) {
+    const params = new URLSearchParams();
+    params.append('totalParticipants', currentParticipants);
+    params.append('Time', getFormattedTime());
 
-    // Send totalParticipants count
-    xhr.send(`totalParticipants=${personCount}&Time=${getFormattedTime()}`);
+    fetch('sender.php', {
+        method: 'POST',
+        body: params
+    })
+        .then(async (res) => {
+            const text = await res.text();
+            if (!res.ok) {
+                throw new Error(`Server Error (${res.status}): ${text}`);
+            }
+            console.log('Success:', text);
+        })
+        .catch((err) => {
+            console.error('Request failed:', err.message);
+        });
 }
 
 resetButton.addEventListener('click', function () {
@@ -514,7 +527,7 @@ async function detectPeople() {
             if (insideZone) {
                 personCount += 1;
                 currentParticipants += 1;
-                console.log(`New Person current:${currentParticipants} inside zone! Total Count: ${personCount}`);
+                //console.log(`New Person current:${currentParticipants} inside zone! Total Count: ${personCount}`);
             }
 
             nextTrackedPersons[nextPersonId++] = {

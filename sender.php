@@ -1,33 +1,38 @@
 <?php
+// 1. Read session data and release file lock immediately
 session_start();
+$event = $_SESSION['event_name'] ?? 'Unknown Event';
+session_write_close();
+
+// 2. Validate required payload upfront
+if (!isset($_POST['totalParticipants'])) {
+    http_response_code(400);
+    exit("Error: 'totalParticipants' parameter is required.");
+}
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-// 1. Verify JSON file exists and define absolute path
+// 3. Verify Service Account key exists
 $credentialsPath = __DIR__ . '/key_sender.json';
-
 if (!file_exists($credentialsPath)) {
-    die("Error: JSON key file not found at: " . $credentialsPath);
+    http_response_code(500);
+    exit("Error: JSON key file not found at: " . $credentialsPath);
 }
 
-// Ensure required keys exist before processing
-if (isset($_POST['totalParticipants'])) {
-    $totalParticipants = $_POST['totalParticipants'];
-    $event = $_SESSION['event_name'] ?? 'Unknown Event';
-    $time = $_POST['Time'] ?? date('Y-m-d H:i:s');
+$totalParticipants = $_POST['totalParticipants'];
+$time = $_POST['Time'] ?? date('Y-m-d H:i:s');
 
-    // 2. Initialize Google Client
+try {
+    // 4. Initialize Google Client & Service
     $client = new Google\Client();
     $client->setAuthConfig($credentialsPath);
     $client->addScope(Google\Service\Sheets::SPREADSHEETS);
 
     $service = new Google\Service\Sheets($client);
 
-    // 3. Target Spreadsheet & Range
     $spreadsheetId = '1_LYqqnuCgZ1R-HtfwZWuRSNuAx1-9JfIulXHb8Q22mo';
     $range = 'A:C';
 
-    // 4. Prepare Data for Columns: [A: Event_name, B: Participants, C: Time]
     $data = [
         [$event, $totalParticipants, $time]
     ];
@@ -40,7 +45,7 @@ if (isset($_POST['totalParticipants'])) {
         'valueInputOption' => 'USER_ENTERED'
     ];
 
-    // 5. Append Data
+    // 5. Execute append
     $result = $service->spreadsheets_values->append(
         $spreadsheetId,
         $range,
@@ -48,5 +53,13 @@ if (isset($_POST['totalParticipants'])) {
         $params
     );
 
+    http_response_code(200);
     echo "Rows successfully inserted: " . $result->getUpdates()->getUpdatedRows();
+
+} catch (Google\Service\Exception $e) {
+    http_response_code(500);
+    echo "Google API Error: " . $e->getMessage();
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo "Server Error: " . $e->getMessage();
 }
